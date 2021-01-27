@@ -228,6 +228,7 @@ __global__ void kmeans_assign_lloyd_smallc(
   F *shared_centroids = shared_samples + blockDim.x * d_features_size;
   const uint32_t cstep = (d_shmem_size - blockDim.x * d_features_size) /
       (d_features_size + 1);
+      F *csqrs = shared_centroids + cstep * d_features_size;
   const uint32_t size_each = cstep /
       min(blockDim.x, length - blockIdx.x * blockDim.x) + 1;
   const uint32_t local_sample = sample + offset;
@@ -241,14 +242,23 @@ __global__ void kmeans_assign_lloyd_smallc(
 
   for (uint32_t gc = 0; gc < d_clusters_size; gc += cstep) {
     uint32_t coffset = gc * d_features_size;
+    __syncthreads();  
+    for (uint32_t i = 0; i < size_each; i++) {
+      uint32_t ci = threadIdx.x * size_each + i;
+      uint32_t local_offset = ci * d_features_size;
+      uint32_t global_offset = coffset + local_offset;
+      if (global_offset < d_clusters_size * d_features_size && ci < cstep) {
+        csqrs[ci] = METRIC<M, F>::sum_squares(
+            centroids + global_offset, shared_centroids + local_offset);
+      }
+    }
     __syncthreads();
     if (insane) {
       continue;
     }
     for (uint32_t c = gc; c < gc + cstep && c < d_clusters_size; c++) {
       coffset = (c - gc) * d_features_size;
-      HF dist = METRIC<M, F>::distance(
-        shared_samples + soffset, 
+      HF dist = METRIC<M, F>::distance(shared_samples + soffset, 
         shared_centroids + coffset);
       if (_lt(dist, min_dist)) {
         min_dist = dist;
@@ -288,6 +298,7 @@ __global__ void kmeans_assign_lloyd(
   extern __shared__ float _shared_centroids[];
   F *shared_centroids = reinterpret_cast<F *>(_shared_centroids);
   const uint32_t cstep = d_shmem_size / (d_features_size + 1);
+  F *csqrs = shared_centroids + cstep * d_features_size;
   const uint32_t size_each = cstep /
       min(blockDim.x, length - blockIdx.x * blockDim.x) + 1;
   const uint32_t local_sample = sample + offset;
@@ -295,6 +306,16 @@ __global__ void kmeans_assign_lloyd(
 
   for (uint32_t gc = 0; gc < d_clusters_size; gc += cstep) {
     uint32_t coffset = gc * d_features_size;
+    __syncthreads(); 
+    for (uint32_t i = 0; i < size_each; i++) {
+      uint32_t ci = threadIdx.x * size_each + i;
+      uint32_t local_offset = ci * d_features_size;
+      uint32_t global_offset = coffset + local_offset;
+      if (global_offset < d_clusters_size * d_features_size && ci < cstep) {
+        csqrs[ci] = METRIC<M, F>::sum_squares(
+            centroids + global_offset, shared_centroids + local_offset);
+      }
+    }
     __syncthreads();
     if (insane) {
       continue;

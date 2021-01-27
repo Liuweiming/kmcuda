@@ -19,6 +19,36 @@ struct METRIC {
 template <typename F>
 struct METRIC<kmcudaDistanceMetricL2, F> {
 
+    FPATTR static F sum_squares(
+      const F *__restrict__ vec, F *__restrict__ cache) {
+    F ssqr = _const<F>(0), corr = _const<F>(0);
+    #pragma unroll 4
+    for (int f = 0; f < d_features_size; f++) {
+      F v = vec[f];
+      if (cache) {
+        cache[f] = v;
+      }
+    }
+    return ssqr;
+  }
+
+  FPATTR static F sum_squares_t(
+      const F *__restrict__ vec, F *__restrict__ cache, uint64_t size, uint64_t index) {
+    F ssqr = _const<F>(0), corr = _const<F>(0);
+    #pragma unroll 4
+    for (uint64_t f = 0; f < d_features_size; f++) {
+      F v = vec[f * size + index];
+      if (cache) {
+        cache[f] = v;
+      }
+    }
+    return ssqr;
+  }
+
+  FPATTR static typename HALF<F>::type distance(F sqr1, F sqr2, F prod) {
+    return _fin(_const<F>(0));
+  }
+
   FPATTR static float distance(const F *__restrict__ v1, const F *__restrict__ v2) {
     // Kahan summation with inverted c
     F dist = _const<F>(0), corr = _const<F>(0);
@@ -32,7 +62,7 @@ struct METRIC<kmcudaDistanceMetricL2, F> {
       corr = _sub(y, _sub(t, dist));
       dist = t;
     }
-    return _sqrt(_float(_fin(dist)));
+    return _float(_fin(dist));
   }
 
   FPATTR static float distance_t(const F *__restrict__ v1, const F *__restrict__ v2,
@@ -49,7 +79,7 @@ struct METRIC<kmcudaDistanceMetricL2, F> {
       corr = _sub(y, _sub(t, dist));
       dist = t;
     }
-    return _sqrt(_float(_fin(dist)));
+    return _float(_fin(dist));
   }
 
   FPATTR static float distance_tt(const F *__restrict__ v, uint64_t size,
@@ -66,7 +96,7 @@ struct METRIC<kmcudaDistanceMetricL2, F> {
       corr = _sub(y, _sub(t, dist));
       dist = t;
     }
-    return _sqrt(_float(_fin(dist)));
+    return _float(_fin(dist));
   }
 
   FPATTR static float partial(const F *__restrict__ v1, const F *__restrict__ v2,
