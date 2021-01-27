@@ -89,6 +89,10 @@ FPATTR float _fma(float acc, float v1, float v2) {
   return __fmaf_rd(v1, v2, acc);
 }
 
+FPATTR float _fabs(float v) {
+  return fabsf(v);
+}
+
 FPATTR bool _lt(float v1, float v2) {
   return v1 < v2;
 }
@@ -177,6 +181,10 @@ FPATTR half _sqrt(half v) {
 
 FPATTR half2 _sqrt(half2 v) {
   return h2sqrt(v);
+}
+
+FPATTR half2 _fabs(half2 v) {
+  return _sqrt(__hmul2(v, v));
 }
 
 #endif // CUDA_ARCH >= 60
